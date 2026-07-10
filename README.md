@@ -15,49 +15,6 @@ Medical representatives describe interactions in natural language. A LangGraph a
 - Full REST API with consistent response envelope
 - PostgreSQL persistence with repository pattern and Alembic migrations
 
-## Architecture Diagram
-
-```mermaid
-flowchart TB
-    subgraph Frontend["React Frontend"]
-        UI[Split Screen UI]
-        Redux[Redux Store]
-        UI --> Redux
-    end
-
-    subgraph Backend["FastAPI Backend"]
-        API[REST API Layer]
-        SVC[Service Layer]
-        REPO[Repository Layer]
-        API --> SVC --> REPO
-    end
-
-    subgraph AI["LangGraph Agent"]
-        PLAN[Planner]
-        REASON[Intent Reasoner]
-        ROUTE[Tool Router]
-        EXEC[Tool Executor]
-        VAL[Validator]
-        UPD[State Updater]
-        RESP[Response Generator]
-        PLAN --> REASON --> ROUTE
-        ROUTE --> EXEC --> VAL
-        VAL --> UPD --> RESP
-        ROUTE --> RESP
-    end
-
-  subgraph DB[(PostgreSQL)]
-  end
-
-    UI -->|POST /chat/stream| API
-    API -->|invoke| AI
-    AI -->|draft patch| API
-    API -->|JSON| Redux
-    Redux -->|render| UI
-    SVC --> REPO --> DB
-    EXEC --> REPO
-```
-
 ## Technology Stack
 
 | Layer | Technologies |

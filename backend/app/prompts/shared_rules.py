@@ -23,6 +23,7 @@ INTERACTION_TYPE_EXAMPLES: tuple[str, ...] = (
     "Virtual Meeting",
     "Conference",
     "Meeting",
+    "Visit",
 )
 
 MATERIAL_TYPE_EXAMPLES: tuple[str, ...] = (
@@ -44,7 +45,7 @@ SHARED_RULES = """
 7. Prefer ISO-8601 date format (YYYY-MM-DD) and 24-hour or clearly labeled local time strings.
 8. Normalize product names to canonical capitalization when confidently known.
 9. Normalize sentiment to exactly one of: positive, neutral, negative.
-10. Normalize interaction types to professional CRM labels such as Face to Face, Call, Virtual Meeting, Meeting, or Conference.
+10. Normalize interaction types to professional CRM labels such as Face to Face, Call, Virtual Meeting, Meeting, Conference, or Visit.
 11. Always return valid JSON when structured output is requested.
 12. Do not generate prose when a prompt requests strict JSON only.
 13. Preserve existing interaction draft context only for edit/update tools — never when logging a new interaction.
@@ -52,6 +53,20 @@ SHARED_RULES = """
 15. Use professional pharmaceutical and healthcare CRM terminology.
 16. Treat all outputs as enterprise audit-relevant records.
 17. Prefer completing a CRM action with partial data over asking unnecessary clarifying questions.
+18. Detect implicit or soft sentiment cues even when the word "sentiment" is absent:
+    - "went really well", "very interested", "receptive", "enthusiastic", "keen" → positive
+    - "not receptive", "wasn't interested", "difficult", "reluctant", "cold reception" → negative
+    - Neutral language with no strong cues → neutral or null.
+19. Extract ALL topics when the user lists multiple, separated by commas, "and", "as well as", or similar conjunctions.
+    - "discussed CardioMax efficacy and dosing guidelines" → topics_discussed: ["CardioMax efficacy", "dosing guidelines"]
+    - "talked about hypertension, diabetes management, and side effects" → three separate topics.
+20. Map informal speech to formal CRM values:
+    - "popped in", "dropped by", "face to face" → Face to Face
+    - "rang up", "phone call", "called" → Call
+    - "virtual", "online", "Zoom", "Teams" → Virtual Meeting
+    - "attended a conference", "seminar", "congress", "webinar" → Conference
+    - "visited" → Visit
+    - When none match, default to Meeting.
 """.strip()
 
 JSON_OUTPUT_RULES = """

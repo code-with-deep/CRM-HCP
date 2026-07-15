@@ -58,11 +58,26 @@ If the user asks to set/change sentiment to positive, neutral, or negative
 - tool_input.sentiment = "positive" | "neutral" | "negative"
 - tool_input.user_instruction = the latest user message
 
-Example:
-User: "update to neutral"
-Correct:
-- selected_tool: edit_interaction
-- tool_input: {{"user_instruction": "update to neutral", "sentiment": "neutral"}}
+Also detect IMPLICIT sentiment when the word "sentiment" is absent:
+- "he was very interested / receptive / keen / enthusiastic" -> sentiment: "positive"
+- "went really well / great meeting" -> sentiment: "positive"
+- "not receptive / wasn't interested / difficult conversation / cold reception" -> sentiment: "negative"
+- Neutral language with no strong cues -> leave sentiment null unless stated.
+
+## Interaction Type Inference (Critical)
+Always infer interaction_type from context — do NOT default everything to "Meeting":
+- "face to face", "face-to-face", "f2f", "in person", "popped in", "dropped by" -> "Face to Face"
+- "rang up", "phone call", "called", "telephone", "over the phone" -> "Call"
+- "virtual", "online", "Zoom", "Teams", "WebEx", "video call" -> "Virtual Meeting"
+- "conference", "congress", "seminar", "symposium", "webinar" -> "Conference"
+- "visited", "visit", "field visit" -> "Visit"
+- Default only when none of the above apply -> "Meeting"
+
+## Multi-Topic Extraction (Critical)
+Extract ALL topics when the user lists multiple topics with commas, "and", "as well as", or similar:
+- "discussed CardioMax efficacy and dosing guidelines" -> topics_discussed: ["CardioMax efficacy", "dosing guidelines"]
+- "talked about hypertension, diabetes management, and side effects" -> three separate topics
+- "spoke about the quarterly review as well as the new product launch" -> two topics
 
 ## Critical Extraction Rules
 If the user describes meeting, calling, or visiting an HCP, you MUST:
@@ -71,37 +86,76 @@ If the user describes meeting, calling, or visiting an HCP, you MUST:
 - Set primary_intent=log_interaction when starting a new interaction
 - Set selected_tool=log_interaction
 - Populate tool_input with EVERY field present in the message
-- Extract ONLY from the latest user message — never copy CardioMax, muscles, or other topics from stale draft context
+- Extract ONLY from the latest user message — never copy stale topics, products, or details from the draft
 
-Example:
-User: "I met Dr Sharma today to discuss CardioMax efficacy."
-Correct output highlights:
+## Examples
+
+Example 1 — Standard meeting with multi-topic:
+User: "I met Dr Sharma today to discuss CardioMax efficacy and dosing guidelines."
+Output highlights:
 - primary_intent: log_interaction
 - selected_tool: log_interaction
-- should_execute_tool: true
-- requires_clarification: false
-- clarification_question: null
 - tool_input: {{
-    "user_instruction": "I met Dr Sharma today to discuss CardioMax efficacy.",
+    "user_instruction": "I met Dr Sharma today to discuss CardioMax efficacy and dosing guidelines.",
     "hcp_name": "Dr Sharma",
     "interaction_date": "{today_iso}",
     "interaction_type": "Meeting",
-    "topics_discussed": ["CardioMax efficacy"],
+    "topics_discussed": ["CardioMax efficacy", "dosing guidelines"],
     "products": ["CardioMax"]
   }}
 
-Example:
+Example 2 — Typos & informal speech:
 User: "I meet Dr. Aman abou the dentail and teet issue"
-Correct output highlights:
+Output highlights:
 - primary_intent: log_interaction
-- selected_tool: log_interaction
 - tool_input: {{
-    "user_instruction": "I meet Dr. Aman abou the dentail and teet issue",
     "hcp_name": "Dr Aman",
     "interaction_date": "{today_iso}",
     "interaction_type": "Meeting",
     "topics_discussed": ["Dental and teeth issues"]
   }}
+
+Example 3 — Face to face with implicit sentiment:
+User: "Had a face-to-face with Dr Gupta at Apollo Hospital — he was very interested in CardioMax."
+Output highlights:
+- interaction_type: "Face to Face"
+- sentiment: "positive"
+- additional_notes may mention "Apollo Hospital"
+
+Example 4 — Phone call:
+User: "Rang up Dr Patel about the quarterly review — he wasn't very receptive."
+Output highlights:
+- interaction_type: "Call"
+- sentiment: "negative"
+- topics_discussed: ["quarterly review"]
+
+Example 5 — Virtual meeting:
+User: "Had a Zoom call with Dr Mehta today to discuss hypertension treatment options."
+Output highlights:
+- interaction_type: "Virtual Meeting"
+- topics_discussed: ["hypertension treatment options"]
+
+Example 6 — Conference with attendees:
+User: "Attended a conference with Dr Singh and Dr Roy about cardiovascular and diabetes management."
+Output highlights:
+- interaction_type: "Conference"
+- topics_discussed: ["cardiovascular", "diabetes management"]
+- attendees: ["Dr Singh", "Dr Roy"]
+
+Example 7 — HCP with initials + time:
+User: "I spoke with Dr A.K. Mehta at 10:30 AM about Lipitor dosing."
+Output highlights:
+- hcp_name: "Dr A.K. Mehta"
+- interaction_time: "10:30 AM"
+- topics_discussed: ["Lipitor dosing"]
+- products: ["Lipitor"]
+
+Example 8 — Call using "positive" in context:
+User: "Had a positive call with Dr Gupta at Apollo about dosing."
+Output highlights:
+- interaction_type: "Call"
+- sentiment: "positive"
+- topics_discussed: ["dosing"]
 
 Do NOT ask for HCP name or date when they are already in the message.
 Only set requires_clarification=true when a required field is truly absent

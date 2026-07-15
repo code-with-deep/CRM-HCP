@@ -25,26 +25,118 @@ _TOPIC_STOPWORDS = {
     "were",
     "is",
     "are",
+    "him",
+    "her",
+    "their",
+    "its",
+    "this",
+    "that",
+    "which",
+    "he",
+    "she",
+    "they",
+    "i",
+    "we",
+    "me",
+    "my",
+    "our",
+    "very",
+    "quite",
+    "really",
 }
 
 _TOPIC_TYPOS = {
+    # existing
     "dentail": "dental",
     "teet": "teeth",
     "abou": "about",
     "muscels": "muscles",
+    # expanded pharmaceutical / clinical typos
+    "eficacy": "efficacy",
+    "eficiency": "efficiency",
+    "presciption": "prescription",
+    "prescribtion": "prescription",
+    "dosege": "dosage",
+    "dosege": "dosage",
+    "mediaction": "medication",
+    "medicaton": "medication",
+    "treatement": "treatment",
+    "treament": "treatment",
+    "clincal": "clinical",
+    "clinicl": "clinical",
+    "theraputic": "therapeutic",
+    "therepeutic": "therapeutic",
+    "cardivascular": "cardiovascular",
+    "cardiovasculer": "cardiovascular",
+    "hypertenshun": "hypertension",
+    "hypertensoin": "hypertension",
+    "diabeties": "diabetes",
+    "diabetis": "diabetes",
+    "oncololgy": "oncology",
+    "oncolgy": "oncology",
+    "neurolgoy": "neurology",
+    "neurologoy": "neurology",
+    "gynaecolgoy": "gynaecology",
+    "orthopaedics": "orthopaedics",
+    "paedatrics": "paediatrics",
+    "pharamacy": "pharmacy",
+    "pharmcy": "pharmacy",
+    "saftey": "safety",
+    "safeity": "safety",
+    "complient": "compliance",
+    "complianse": "compliance",
+    "guidlines": "guidelines",
+    "guidelins": "guidelines",
+    "managment": "management",
+    "managemnt": "management",
+    "reserch": "research",
+    "reseach": "research",
+    "trieal": "trial",
+    "traial": "trial",
+    "benefites": "benefits",
+    "benifits": "benefits",
+    "sideeffects": "side effects",
+    "side-effects": "side effects",
+    "adverse-effects": "adverse effects",
+    "co-morbidity": "comorbidity",
 }
 
+# --- Primary extraction patterns ---
 _DISCUSS_TOPIC_RE = re.compile(
-    r"(?:discuss(?:ed)?|talk(?:ed)?|spoke)\s+(?:about\s+)?(.+?)(?:\.|$|sentiment|shared|follow)",
+    r"(?:discuss(?:ed|ing)?|talk(?:ed|ing)?|spoke|speak|spoken|chat(?:ted)?)"
+    r"(?:\s+(?:to|with|about))?\s+(?:the\s+)?(.+?)"
+    r"(?:\.|$|sentiment|shared|follow|and\s+also|\bwith\b|\bto\b)",
     re.IGNORECASE,
 )
+
 _STANDALONE_ABOUT_RE = re.compile(
-    r"(?:about|abou|regarding)\s+(?:the\s+)?(.+?)(?:\.|$|sentiment|shared|follow)",
+    r"(?:about|abou|regarding|concerning|re:)\s+(?:the\s+)?(.+?)"
+    r"(?:\.|$|sentiment|shared|follow|,\s+(?:and\s+)?(?:he|she|they|the\s+doctor))",
     re.IGNORECASE,
 )
+
 _AFTER_HCP_RE = re.compile(
     r"\bdr\.?\s+[A-Za-z]+(?:\s+[A-Za-z]+)?\s+"
-    r"(?:today\s+)?(?:about|abou|regarding|on)\s+(?:the\s+)?(.+?)(?:\.|$)",
+    r"(?:today\s+)?(?:about|abou|regarding|on|for)\s+(?:the\s+)?(.+?)(?:\.|$)",
+    re.IGNORECASE,
+)
+
+# New patterns
+_FOR_TOPIC_RE = re.compile(
+    r"(?:for\s+(?:a\s+)?(?:discussion|review|talk|meeting|call)\s+(?:on|about|of|regarding))\s+(?:the\s+)?(.+?)(?:\.|$)",
+    re.IGNORECASE,
+)
+
+_ON_TOPIC_RE = re.compile(
+    r"(?:on\s+the\s+topic\s+of|on\s+topics?\s+(?:of|including|such\s+as))\s+(.+?)(?:\.|$)",
+    re.IGNORECASE,
+)
+
+_TOPIC_LIST_SPLITTER_RE = re.compile(
+    # Split on:  ", and",  ", ",  "; ",  " as well as ",  " plus "
+    # Do NOT split on plain " and " alone — that breaks compound phrases like
+    # "dental and teeth issues" or "cardiovascular and hypertension".
+    r"\s*(?:,\s*(?:and\s+)?|;\s*|\s+as\s+well\s+as\s+|\s+plus\s+)\s*",
     re.IGNORECASE,
 )
 
@@ -75,18 +167,44 @@ def normalize_topic_phrase(phrase: str) -> str:
     return result[0].upper() + result[1:] if len(result) > 1 else result.upper()
 
 
+def _split_topic_list(raw: str) -> list[str]:
+    """Split a raw topic string on commas, semicolons, and conjunctions."""
+    parts = _TOPIC_LIST_SPLITTER_RE.split(raw)
+    return [p.strip() for p in parts if p.strip()]
+
+
 def extract_topics_from_message(text: str) -> list[str]:
-    """Extract discussion topics from a free-form interaction message."""
+    """Extract ALL discussion topics from a free-form interaction message.
+
+    Supports multiple topics separated by commas, 'and', 'as well as', etc.
+    Returns a deduplicated list ordered by appearance.
+    """
     if not text or not text.strip():
         return []
 
-    for pattern in (_DISCUSS_TOPIC_RE, _STANDALONE_ABOUT_RE, _AFTER_HCP_RE):
-        match = pattern.search(text)
-        if not match:
-            continue
-        topic = normalize_topic_phrase(match.group(1))
-        if topic:
-            return [topic]
+    seen: set[str] = set()
+    topics: list[str] = []
+
+    def _add(raw: str) -> None:
+        for part in _split_topic_list(raw):
+            normalized = normalize_topic_phrase(part)
+            if normalized and normalized.lower() not in seen:
+                seen.add(normalized.lower())
+                topics.append(normalized)
+
+    # Try every pattern and accumulate all matches
+    for pattern in (
+        _DISCUSS_TOPIC_RE,
+        _STANDALONE_ABOUT_RE,
+        _AFTER_HCP_RE,
+        _FOR_TOPIC_RE,
+        _ON_TOPIC_RE,
+    ):
+        for match in pattern.finditer(text):
+            _add(match.group(1))
+
+    if topics:
+        return topics
 
     # Fallback: capture clinical issue phrases when no "about" preposition is present.
     issue_match = re.search(
@@ -96,8 +214,6 @@ def extract_topics_from_message(text: str) -> list[str]:
         re.IGNORECASE,
     )
     if issue_match:
-        topic = normalize_topic_phrase(issue_match.group(1))
-        if topic:
-            return [topic]
+        _add(issue_match.group(1))
 
-    return []
+    return topics

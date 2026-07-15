@@ -15,13 +15,36 @@ from app.langgraph.schemas import AgentIntent, PlannerOutput, ToolExtractionHint
 from app.langgraph.state import AgentState, InteractionDraft, get_interaction_draft
 from app.langgraph.topic_extraction import extract_topics_from_message
 
+# ---------------------------------------------------------------------------
+# Regex patterns
+# ---------------------------------------------------------------------------
+
 _SENTIMENT_RE = re.compile(r"\b(positive|neutral|negative)\b", re.IGNORECASE)
+
+# Implicit / soft sentiment phrases
+_SOFT_POSITIVE_RE = re.compile(
+    r"\b(?:went\s+(?:really\s+)?well|very\s+(?:interested|receptive|engaged|enthusiastic)|"
+    r"great\s+(?:meeting|call|visit|response|reception)|(?:happy|pleased|excited)\s+(?:with|about)|"
+    r"showed\s+(?:great\s+)?interest|keen\s+to|looking\s+forward|appreciated|impressed)\b",
+    re.IGNORECASE,
+)
+_SOFT_NEGATIVE_RE = re.compile(
+    r"\b(?:not\s+(?:very\s+)?receptive|wasn't\s+(?:very\s+)?(?:interested|receptive|engaged)|"
+    r"didn't\s+go\s+(?:well|great)|(?:reluctant|hesitant|skeptical|sceptical|resistant|uninterested)|"
+    r"wasn't\s+(?:happy|pleased)|not\s+(?:happy|pleased|interested|keen)|"
+    r"difficult\s+(?:meeting|call|conversation)|(?:hard\s+to\s+convince|cold\s+reception))\b",
+    re.IGNORECASE,
+)
+
 _HELP_RE = re.compile(
     r"\b(help|how can you help|what can you do|capabilities|assist me)\b",
     re.IGNORECASE,
 )
+
+# HCP name patterns — now supports initials like Dr A.K. Gupta
 _HCP_RE = re.compile(
-    r"\b(?:Dr\.?|DR\.?|doctor)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)"
+    r"\b(?:Dr\.?|DR\.?|doctor)\s+"
+    r"([A-Z](?:\.[A-Z]\.?)*\s+)?([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)"
 )
 _HCP_STOPWORDS = {
     "today",
@@ -37,6 +60,9 @@ _HCP_STOPWORDS = {
     "the",
     "a",
     "an",
+    "up",
+    "back",
+    "again",
 }
 _HCP_CHANGE_RE = re.compile(
     r"(?:change|update|rename|actually|was|correct).*?(?:doctor|hcp|name).*?"
@@ -50,16 +76,43 @@ _FOLLOW_UP_RE = re.compile(
 _OUTCOME_RE = re.compile(r"\b(outcome|agreement|agreed|interested)\b", re.IGNORECASE)
 _SEARCH_RE = re.compile(r"\b(find|search|look up|lookup)\b", re.IGNORECASE)
 _MATERIALS_RE = re.compile(
-    r"\b(material|brochure|leaflet|presentation|shared)\b",
+    r"\b(material|brochure|leaflet|presentation|shared|pamphlet|flyer|handout|literature)\b",
     re.IGNORECASE,
 )
 _SAMPLES_RE = re.compile(r"\b(sample|samples)\b", re.IGNORECASE)
+
+# Extended: "had a meeting/call/visit", "attended", "spoke with"
 _LOG_RE = re.compile(
-    r"\b(met|meet|meeting|called|call|visited|visit|discussed|discuss)\b",
+    r"\b(met|meet|meeting|called|call|visited|visit|discussed|discuss"
+    r"|had\s+a\s+(?:meeting|call|visit|chat|face\s+to\s+face|virtual|conference)"
+    r"|attended|spoke\s+(?:to|with)|spoken\s+(?:to|with)|caught\s+up\s+with"
+    r"|rang(?:\s+up)?|popped\s+(?:in|by)|dropped\s+(?:in|by))\b",
     re.IGNORECASE,
 )
+
+# Interaction type detection
+_FACE_TO_FACE_RE = re.compile(
+    r"\b(face[\s\-]to[\s\-]face|f2f|in[\s\-]person|in\s+person\s+meeting|personal\s+visit|"
+    r"popped\s+(?:in|by)|dropped\s+(?:in|by))\b",
+    re.IGNORECASE,
+)
+_VIRTUAL_RE = re.compile(
+    r"\b(virtual|online|video\s+call|zoom|teams|webex|google\s+meet|skype|web\s+meeting|"
+    r"remote\s+meeting|video\s+meeting)\b",
+    re.IGNORECASE,
+)
+_CONFERENCE_RE = re.compile(
+    r"\b(conference|congress|symposium|seminar|webinar|summit|convention)\b",
+    re.IGNORECASE,
+)
+_CALL_RE = re.compile(
+    r"\b(call(?:ed)?|phone|rang(?:\s+up)?|telephone|tele(?:-)?call|over\s+the\s+phone)\b",
+    re.IGNORECASE,
+)
+
 _DATE_CHANGE_RE = re.compile(
-    r"\b(change|update|set|make)\b.*\b(date|time)\b|\b(date|time)\b.*\b(to|as)\b",
+    r"\b(change|update|set|make|reschedule|move)\b.*\b(date|time|meeting|appointment)\b"
+    r"|\b(date|time)\b.*\b(to|as)\b",
     re.IGNORECASE,
 )
 _WEEKDAY_RE = re.compile(
@@ -84,10 +137,35 @@ _SENTIMENT_CONTEXT_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Location / hospital extraction
+_LOCATION_RE = re.compile(
+    r"\bat\s+([A-Za-z][A-Za-z\s]+?(?:Hospital|Clinic|Centre|Center|Institute|Medical|Polyclinic|Healthcare))\b"
+    r"|\b([A-Za-z][A-Za-z\s]+?(?:Hospital|Clinic|Centre|Center|Institute))\b",
+    re.IGNORECASE,
+)
+
+# Product name patterns: CamelCase brand names AND known generic drug terms
+_PRODUCT_BRAND_RE = re.compile(
+    r"\b([A-Z][a-zA-Z0-9]{2,}(?:Max|Pro|X|Plus|Forte|SR|XR|ER|OD|CR|LA|MR)?)\b"
+)
+_GENERIC_DRUG_RE = re.compile(
+    r"\b(metformin|lipitor|atorvastatin|amlodipine|ramipril|losartan|omeprazole|"
+    r"pantoprazole|aspirin|clopidogrel|warfarin|insulin|glipizide|sitagliptin|"
+    r"rosuvastatin|simvastatin|lisinopril|valsartan|telmisartan|bisoprolol|"
+    r"carvedilol|furosemide|spironolactone|allopurinol|colchicine|febuxostat|"
+    r"montelukast|salbutamol|tiotropium|budesonide|fluticasone|prednisolone|"
+    r"dexamethasone|amoxicillin|azithromycin|ciprofloxacin|metronidazole|"
+    r"fluconazole|acyclovir|oseltamivir|hydroxychloroquine|methotrexate)\b",
+    re.IGNORECASE,
+)
+
 _HELP_MESSAGE = (
     "I can help you log and update HCP interactions through chat. "
     "Try messages like:\n"
-    "• \"I met Dr Sharma today to discuss CardioMax efficacy. Sentiment was positive.\"\n"
+    "• \"I met Dr Sharma today to discuss CardioMax efficacy.\"\n"
+    "• \"Had a face-to-face with Dr Gupta — he was very interested.\"\n"
+    "• \"Attended a conference with Dr Singh about hypertension.\"\n"
+    "• \"Rang up Dr Patel about the quarterly review.\"\n"
     "• \"Change the doctor name to Dr John.\"\n"
     "• \"Find Dr Gupta at Apollo Hospital.\"\n"
     "• \"Shared CardioMax brochure and 2 sample packs.\"\n"
@@ -205,13 +283,24 @@ def _build_follow_up_update(text: str, draft: InteractionDraft) -> PlannerOutput
     )
 
 
-def _extract_log_sentiment(text: str, lowered: str) -> str | None:
-    sentiment_match = _SENTIMENT_RE.search(text)
-    if not sentiment_match:
-        return None
-    if "sentiment" in lowered or _SENTIMENT_CONTEXT_RE.search(text):
-        return sentiment_match.group(1).lower()
+def _extract_soft_sentiment(text: str) -> str | None:
+    """Detect implicit/soft sentiment cues from natural language."""
+    if _SOFT_POSITIVE_RE.search(text):
+        return "positive"
+    if _SOFT_NEGATIVE_RE.search(text):
+        return "negative"
     return None
+
+
+def _extract_log_sentiment(text: str, lowered: str) -> str | None:
+    """Extract explicit or implicit sentiment from an interaction message."""
+    # Explicit sentiment keyword
+    sentiment_match = _SENTIMENT_RE.search(text)
+    if sentiment_match:
+        if "sentiment" in lowered or _SENTIMENT_CONTEXT_RE.search(text):
+            return sentiment_match.group(1).lower()
+    # Implicit/soft sentiment
+    return _extract_soft_sentiment(text)
 
 
 def _next_weekday(name: str, *, reference: date | None = None) -> date:
@@ -247,6 +336,8 @@ def _resolve_relative_date(text: str) -> str | None:
 
 
 def _extract_hcp_name(text: str) -> str | None:
+    """Extract HCP name, including initials like Dr A.K. Gupta."""
+    # Change / rename pattern first
     change = _HCP_CHANGE_RE.search(text)
     if change:
         name = change.group(1).strip(" .,")
@@ -263,12 +354,20 @@ def _extract_hcp_name(text: str) -> str | None:
         else:
             cleaned = re.sub(r"^dr\.?\s*", "Dr ", cleaned, flags=re.IGNORECASE).strip()
         return cleaned
+
+    # Primary pattern — supports initials (Dr A.K. Gupta → "Dr A.K. Gupta")
     match = _HCP_RE.search(text)
     if match:
-        return f"Dr {match.group(1).strip()}"
+        initials = (match.group(1) or "").strip()
+        surname = match.group(2).strip()
+        if surname.lower() in _HCP_STOPWORDS:
+            return None
+        full = f"{initials} {surname}".strip() if initials else surname
+        return f"Dr {full}"
+
     # Fallback for lowercase "dr sharma"
     loose = re.search(
-        r"\b(?:dr\.?|doctor)\s+([A-Za-z]+)(?:\s+([A-Za-z]+))?",
+        r"\b(?:dr\.?|doctor)\s+([A-Za-z]+(?:\.[A-Za-z]\.?)?)(?:\s+([A-Za-z]+))?",
         text,
         re.IGNORECASE,
     )
@@ -284,19 +383,88 @@ def _extract_hcp_name(text: str) -> str | None:
     return None
 
 
+def _infer_interaction_type(text: str, lowered: str) -> str:
+    """Infer the most specific interaction type from natural language."""
+    if _FACE_TO_FACE_RE.search(text):
+        return "Face to Face"
+    if _CONFERENCE_RE.search(text):
+        return "Conference"
+    if _VIRTUAL_RE.search(text):
+        return "Virtual Meeting"
+    if _CALL_RE.search(text):
+        return "Call"
+    if "visit" in lowered:
+        return "Visit"
+    return "Meeting"
+
+
 def _extract_products(text: str, topics: list[str]) -> list[str]:
+    """Extract brand-name and generic drug products from text."""
     products: list[str] = []
-    for match in re.finditer(r"\b([A-Z][a-zA-Z0-9]*(?:Max|Pro|X))\b", text):
+    seen: set[str] = set()
+
+    # Brand-name products (CamelCase with optional suffix)
+    for match in _PRODUCT_BRAND_RE.finditer(text):
         product = match.group(1)
-        if product not in products:
+        key = product.lower()
+        if key not in seen:
+            seen.add(key)
             products.append(product)
+
+    # Generic drug names
+    for match in _GENERIC_DRUG_RE.finditer(text):
+        product = match.group(1).title()
+        key = product.lower()
+        if key not in seen:
+            seen.add(key)
+            products.append(product)
+
+    # Fall back to scanning topics
     if not products:
         for topic in topics:
-            for match in re.finditer(r"\b([A-Z][a-zA-Z0-9]*(?:Max|Pro|X))\b", topic):
+            for match in _PRODUCT_BRAND_RE.finditer(topic):
                 product = match.group(1)
-                if product not in products:
+                key = product.lower()
+                if key not in seen:
+                    seen.add(key)
                     products.append(product)
+
     return products
+
+
+def _extract_location(text: str) -> str | None:
+    """Extract hospital or clinic name from text."""
+    match = _LOCATION_RE.search(text)
+    if match:
+        return (match.group(1) or match.group(2) or "").strip()
+    return None
+
+
+def _extract_time(text: str) -> str | None:
+    """Extract time string from text (e.g. '10:30 AM', '14:00')."""
+    match = re.search(r"\b(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?|\d{1,2}\s*(?:AM|PM|am|pm))\b", text)
+    return match.group(1).strip() if match else None
+
+
+def _extract_sample_with_product(text: str) -> list[str]:
+    """Extract sample entries including named product and quantity if present."""
+    samples: list[str] = []
+    # Pattern: "3 CardioMax samples", "2 packs of Lipitor"
+    qty_product = re.finditer(
+        r"\b(\d+)\s+(?:packs?\s+of\s+)?([A-Z][a-zA-Z0-9]+)\s+samples?\b"
+        r"|\b([A-Z][a-zA-Z0-9]+)\s+samples?\s*(?:x|×)?\s*(\d+)\b",
+        text,
+        re.IGNORECASE,
+    )
+    for match in qty_product:
+        if match.group(1) and match.group(2):
+            samples.append(f"{match.group(2)} x{match.group(1)}")
+        elif match.group(3) and match.group(4):
+            samples.append(f"{match.group(3)} x{match.group(4)}")
+    if not samples and _SAMPLES_RE.search(text):
+        qty = re.search(r"\b(\d+)\b", text)
+        samples.append(f"Sample packs x{qty.group(1)}" if qty else "Sample packs")
+    return samples
 
 
 def plan_from_local_rules(state: AgentState, text: str) -> PlannerOutput | None:
@@ -425,9 +593,13 @@ def plan_from_local_rules(state: AgentState, text: str) -> PlannerOutput | None:
         resolved = _resolve_relative_date(text)
         if resolved and "date" in lowered:
             patch.interaction_date = resolved
-        time_match = re.search(r"\b(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?)\b", text)
+        # weekday date resolution (e.g. "reschedule to Monday")
+        weekday_match = _WEEKDAY_RE.search(text)
+        if weekday_match and not patch.interaction_date:
+            patch.interaction_date = _next_weekday(weekday_match.group(1)).isoformat()
+        time_match = _extract_time(text)
         if time_match and "time" in lowered:
-            patch.interaction_time = time_match.group(1)
+            patch.interaction_time = time_match
         if patch.interaction_date or patch.interaction_time:
             return PlannerOutput(
                 objective="Update interaction date/time.",
@@ -466,7 +638,7 @@ def plan_from_local_rules(state: AgentState, text: str) -> PlannerOutput | None:
     # Search HCP.
     if _SEARCH_RE.search(text):
         hcp_name = _extract_hcp_name(text)
-        hospital_match = re.search(r"\bat\s+([A-Za-z][A-Za-z\s]+Hospital)", text, re.IGNORECASE)
+        hospital = _extract_location(text)
         return PlannerOutput(
             objective="Search for an HCP.",
             requires_tool_execution=True,
@@ -478,7 +650,7 @@ def plan_from_local_rules(state: AgentState, text: str) -> PlannerOutput | None:
                 user_instruction=text,
                 doctor_name=hcp_name,
                 hcp_name=hcp_name,
-                hospital=hospital_match.group(1).strip() if hospital_match else None,
+                hospital=hospital,
             ),
             should_execute_tool=True,
         )
@@ -511,16 +683,21 @@ def plan_from_local_rules(state: AgentState, text: str) -> PlannerOutput | None:
                 intent=AgentIntent.UPDATE_MATERIALS,
             )
         materials: list[str] = []
-        samples: list[str] = []
         if "brochure" in lowered:
             materials.append("Brochures")
         if "leaflet" in lowered:
             materials.append("Leaflet")
         if "presentation" in lowered:
             materials.append("Presentation")
-        if _SAMPLES_RE.search(text):
-            qty = re.search(r"\b(\d+)\b", text)
-            samples.append(f"Sample packs x{qty.group(1)}" if qty else "Sample packs")
+        if "pamphlet" in lowered:
+            materials.append("Pamphlet")
+        if "flyer" in lowered:
+            materials.append("Flyer")
+        if "handout" in lowered:
+            materials.append("Handout")
+        if "literature" in lowered:
+            materials.append("Literature")
+        samples = _extract_sample_with_product(text) if _SAMPLES_RE.search(text) else []
         if materials or samples:
             return PlannerOutput(
                 objective="Update materials and samples.",
@@ -540,11 +717,7 @@ def plan_from_local_rules(state: AgentState, text: str) -> PlannerOutput | None:
     # New interaction log.
     if _LOG_RE.search(text) and _extract_hcp_name(text):
         hcp_name = _extract_hcp_name(text)
-        interaction_type = "Meeting"
-        if "call" in lowered:
-            interaction_type = "Call"
-        elif "visit" in lowered:
-            interaction_type = "Visit"
+        interaction_type = _infer_interaction_type(text, lowered)
         topics = extract_topics_from_message(text)
         products = _extract_products(text, topics)
         sentiment = _extract_log_sentiment(text, lowered)
@@ -552,6 +725,9 @@ def plan_from_local_rules(state: AgentState, text: str) -> PlannerOutput | None:
         if "brochure" in lowered:
             materials.append("Brochures")
         interaction_date = _resolve_relative_date(text) or date.today().isoformat()
+        interaction_time = _extract_time(text)
+        hospital = _extract_location(text)
+        additional_notes = hospital if hospital else None
         return PlannerOutput(
             objective=f"Log interaction with {hcp_name}.",
             requires_tool_execution=True,
@@ -564,10 +740,12 @@ def plan_from_local_rules(state: AgentState, text: str) -> PlannerOutput | None:
                 hcp_name=hcp_name,
                 interaction_type=interaction_type,
                 interaction_date=interaction_date,
+                interaction_time=interaction_time,
                 topics_discussed=topics,
                 products=products,
                 sentiment=sentiment,
                 materials_shared=materials,
+                additional_notes=additional_notes,
             ),
             should_execute_tool=True,
         )

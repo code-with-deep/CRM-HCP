@@ -2,8 +2,18 @@ import type { RootState } from '@/store'
 import type { ChatMessage } from '@/types/chat.types'
 import type { InteractionDraft, InteractionStatus } from '@/types/interaction.types'
 import { EMPTY_INTERACTION_DRAFT } from '@/types/interaction.types'
+import { getCurrentUserId } from '@/services/apiClient'
 
-const STORAGE_KEY = 'crm-hcp-workspace-session'
+const STORAGE_KEY_PREFIX = 'crm-hcp-workspace-session'
+
+/**
+ * Return a user-scoped sessionStorage key so that different users logging in
+ * on the same browser tab never share each other's conversation state.
+ */
+function getStorageKey(): string {
+  const userId = getCurrentUserId()
+  return userId ? `${STORAGE_KEY_PREFIX}-${userId}` : STORAGE_KEY_PREFIX
+}
 
 export interface PersistedWorkspaceSession {
   conversationId: string | null
@@ -38,8 +48,9 @@ export function hasPersistableSession(state: RootState): boolean {
 }
 
 export function persistWorkspaceSession(state: RootState): void {
+  const key = getStorageKey()
   if (!hasPersistableSession(state)) {
-    sessionStorage.removeItem(STORAGE_KEY)
+    sessionStorage.removeItem(key)
     return
   }
 
@@ -53,11 +64,12 @@ export function persistWorkspaceSession(state: RootState): void {
     selectedHcpName: state.hcp.selectedHcpName,
   }
 
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+  sessionStorage.setItem(key, JSON.stringify(payload))
 }
 
 export function loadWorkspaceSession(): PersistedWorkspaceSession | null {
-  const raw = sessionStorage.getItem(STORAGE_KEY)
+  const key = getStorageKey()
+  const raw = sessionStorage.getItem(key)
   if (!raw) {
     return null
   }
@@ -74,11 +86,11 @@ export function loadWorkspaceSession(): PersistedWorkspaceSession | null {
       selectedHcpName: parsed.selectedHcpName ?? null,
     }
   } catch {
-    sessionStorage.removeItem(STORAGE_KEY)
+    sessionStorage.removeItem(key)
     return null
   }
 }
 
 export function clearWorkspaceSession(): void {
-  sessionStorage.removeItem(STORAGE_KEY)
+  sessionStorage.removeItem(getStorageKey())
 }

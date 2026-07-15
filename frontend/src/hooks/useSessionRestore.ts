@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react'
 
-import { getCurrentUserId } from '@/services/apiClient'
 import { chatService } from '@/services/chatService'
 import { useAppDispatch } from '@/store/hooks'
 import {
@@ -78,7 +77,6 @@ export function useSessionRestore() {
         try {
           const serverSession = await chatService.getSession(
             localSession.conversationId,
-            getCurrentUserId(),
           )
 
           dispatch(setConversationId(serverSession.conversation_id))

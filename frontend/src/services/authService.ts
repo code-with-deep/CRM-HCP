@@ -3,6 +3,7 @@
  */
 
 import { apiClient, clearToken, saveToken } from './apiClient'
+import { clearWorkspaceSession } from '@/utils/sessionPersistence'
 
 export interface TokenResponse {
   access_token: string
@@ -38,6 +39,7 @@ export async function register(details: RegisterRequest): Promise<TokenResponse>
 }
 
 export function logout(): void {
+  clearWorkspaceSession()
   clearToken()
   window.location.href = '/login'
 }

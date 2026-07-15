@@ -37,7 +37,14 @@ _SOFT_NEGATIVE_RE = re.compile(
 )
 
 _HELP_RE = re.compile(
-    r"\b(help|how can you help|what can you do|capabilities|assist me)\b",
+    r"\b(help|how can you help|what can you do|capabilities|assist me|what do you do|"
+    r"what can i do|how does this work|get started|getting started|instructions)\b",
+    re.IGNORECASE,
+)
+
+_GREETING_RE = re.compile(
+    r"^(hi+|hey+|hello+|howdy|greetings|good\s+(?:morning|afternoon|evening|day)|"
+    r"what'?s\s+up|sup|yo|namaste|hola|salut|bonjour|ola)[\s!.?,]*$",
     re.IGNORECASE,
 )
 
@@ -159,18 +166,28 @@ _GENERIC_DRUG_RE = re.compile(
     re.IGNORECASE,
 )
 
+_GREETING_MESSAGE = (
+    "Hello! I'm your Pharmaceutical CRM AI Assistant. "
+    "I help Medical Representatives log and manage HCP (Healthcare Professional) interactions efficiently. "
+    "How can I help you today?"
+)
+
 _HELP_MESSAGE = (
-    "I can help you log and update HCP interactions through chat. "
-    "Try messages like:\n"
-    "• \"I met Dr Sharma today to discuss CardioMax efficacy.\"\n"
-    "• \"Had a face-to-face with Dr Gupta — he was very interested.\"\n"
-    "• \"Attended a conference with Dr Singh about hypertension.\"\n"
-    "• \"Rang up Dr Patel about the quarterly review.\"\n"
-    "• \"Change the doctor name to Dr John.\"\n"
+    "Here's what I can do for you:\n\n"
+    "📋 Log a new HCP interaction:\n"
+    "• \"I met Dr Sharma today to discuss CardioMax efficacy and dosing guidelines.\"\n"
+    "• \"Had a face-to-face with Dr Gupta at Apollo Hospital — he was very interested.\"\n"
+    "• \"Attended a conference with Dr Singh and Dr Roy about hypertension management.\"\n"
+    "• \"Rang up Dr Patel about the quarterly review — he wasn't very receptive.\"\n\n"
+    "✏️ Update an existing interaction:\n"
+    "• \"Update sentiment to positive.\"\n"
+    "• \"Change follow-up to next Monday.\"\n"
+    "• \"Shared CardioMax brochure and distributed 2 sample packs.\"\n"
+    "• \"Outcome: HCP is interested in a clinical trial.\"\n\n"
+    "🔍 Find an HCP:\n"
     "• \"Find Dr Gupta at Apollo Hospital.\"\n"
-    "• \"Shared CardioMax brochure and 2 sample packs.\"\n"
-    "• \"Outcome: interested in trial; follow up next Friday.\"\n\n"
-    "The left form is AI-controlled — describe changes here and I will update it for you."
+    "• \"Search for Dr Mehta in Mumbai.\"\n\n"
+    "The CRM form on the left is AI-controlled — just describe what happened and I'll update it for you."
 )
 
 
@@ -475,7 +492,21 @@ def plan_from_local_rules(state: AgentState, text: str) -> PlannerOutput | None:
     draft = get_interaction_draft(state)
     lowered = text.lower().strip()
 
-    if _HELP_RE.search(text) or lowered in {"hi", "hello", "hey"}:
+    if _GREETING_RE.match(lowered):
+        return PlannerOutput(
+            objective="Welcome the user.",
+            requires_tool_execution=False,
+            context_summary="Greeting.",
+            primary_intent=AgentIntent.GENERAL_ASSISTANCE,
+            confidence=0.98,
+            reasoning="User sent a greeting.",
+            requires_clarification=True,
+            clarification_question=_GREETING_MESSAGE,
+            selected_tool=ToolName.NONE,
+            should_execute_tool=False,
+        )
+
+    if _HELP_RE.search(text):
         return PlannerOutput(
             objective="Explain assistant capabilities.",
             requires_tool_execution=False,

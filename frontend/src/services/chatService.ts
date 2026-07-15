@@ -1,4 +1,4 @@
-import { apiClient, classifyApiError, getApiBaseUrl } from '@/services/apiClient'
+import { apiClient, classifyApiError, getApiBaseUrl, getToken } from '@/services/apiClient'
 import type { ApiResponse } from '@/types/api.types'
 import type { ChatRequest, ChatResponseData } from '@/types/chat.types'
 
@@ -11,13 +11,9 @@ export class ChatService {
     return response.data.data
   }
 
-  async getSession(
-    conversationId: string,
-    userId: string,
-  ): Promise<ChatResponseData> {
+  async getSession(conversationId: string): Promise<ChatResponseData> {
     const response = await apiClient.get<ApiResponse<ChatResponseData>>(
       `/chat/session/${conversationId}`,
-      { params: { user_id: userId } },
     )
     return response.data.data
   }
@@ -27,16 +23,20 @@ export class ChatService {
     signal?: AbortSignal,
   ): AsyncGenerator<{ event: string; data: Record<string, unknown> }> {
     const baseUrl = getApiBaseUrl()
-    const userId = import.meta.env.VITE_DEMO_USER_ID ?? ''
+    const token = getToken()
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
 
     let response: Response
     try {
       response = await fetch(`${baseUrl}/chat/stream`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User-Id': userId,
-        },
+        headers,
         body: JSON.stringify(request),
         signal,
       })

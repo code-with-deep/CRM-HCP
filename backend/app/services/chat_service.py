@@ -260,10 +260,14 @@ class ChatService:
         conversation_id: UUID | None,
         user_id: UUID,
     ) -> ConversationSession:
-        """Load an existing conversation or create a new session."""
+        """Load an existing conversation or create a new session.
+
+        Ownership is strictly enforced: a user cannot access another user's
+        conversation even if they know the conversation ID.
+        """
         if conversation_id:
             session = await self._session_repository.get_by_id(conversation_id)
-            if session is None:
+            if session is None or session.user_id != user_id:
                 raise NotFoundException(
                     message="Conversation not found",
                     detail=f"No conversation session exists for id={conversation_id}",

@@ -21,7 +21,6 @@ build/
 
 # IDE
 .idea/
-.vscode/
 *.swp
 *.swo
 
@@ -43,3 +42,7 @@ htmlcov/
 
 # Alembic
 # Keep versions folder; ignore local sqlite if used during dev
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+.gitignore

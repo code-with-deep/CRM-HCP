@@ -119,6 +119,20 @@ def _build_fast_response(state: AgentState) -> str | None:
     if clarification:
         return clarification
 
+    # For general assistance with no active draft, provide a short guided prompt.
+    primary_intent = intent.get("primary_intent") or planner.get("primary_intent") or ""
+    if primary_intent == "general_assistance":
+        if draft.hcp_name:
+            return (
+                f"I'm ready to help with your interaction with {draft.hcp_name}. "
+                "Just tell me what you'd like to update — sentiment, follow-up, materials, or outcomes."
+            )
+        return (
+            "To get started, describe an HCP interaction — for example: "
+            "\"I met Dr Sharma today to discuss CardioMax efficacy.\" "
+            "I'll capture it in the form on the left."
+        )
+
     return None
 
 

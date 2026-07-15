@@ -6,8 +6,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text, func, text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Index, Integer, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -25,12 +24,12 @@ class ConversationSession(AuditMixin, Base):
 
     __tablename__ = "conversation_sessions"
     __table_args__ = (
-        Index("ix_conversation_sessions_user_active", "user_id", postgresql_where=text("deleted_at IS NULL")),
-        Index("ix_conversation_sessions_status_active", "status", postgresql_where=text("deleted_at IS NULL")),
+        Index("ix_conversation_sessions_user_active", "user_id"),
+        Index("ix_conversation_sessions_status_active", "status"),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True, native_uuid=False),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
@@ -46,7 +45,7 @@ class ConversationSession(AuditMixin, Base):
         server_default=func.now(),
     )
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    session_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    session_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     user: Mapped[User] = relationship(
         back_populates="conversation_sessions",
@@ -71,7 +70,7 @@ class ConversationMessage(AuditMixin, Base):
     )
 
     session_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True, native_uuid=False),
         ForeignKey("conversation_sessions.id", ondelete="CASCADE"),
         nullable=False,
         index=True,

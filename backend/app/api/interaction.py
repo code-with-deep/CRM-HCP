@@ -6,7 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Request
 
 from app.api.response import success_response
-from app.core.dependencies import InteractionServiceDep
+from app.core.dependencies import CurrentUserDep, InteractionServiceDep
 from app.schemas.interaction_api import SaveInteractionRequest
 from app.schemas.interaction_detail import InteractionDetailResponse
 from app.schemas.responses import ApiResponse
@@ -43,10 +43,16 @@ async def save_interaction(
     request: Request,
     payload: SaveInteractionRequest,
     interaction_service: InteractionServiceDep,
+    current_user: CurrentUserDep,
 ) -> ApiResponse[InteractionDetailResponse]:
-    """Validate and persist an interaction draft with related associations."""
+    """Validate and persist an interaction draft with related associations.
+
+    The user_id in the payload is overridden by the verified JWT identity so that
+    a user cannot save an interaction under another user's account.
+    """
     start_time = time.perf_counter()
-    saved = await interaction_service.save_interaction(payload)
+    enforced_payload = payload.model_copy(update={"user_id": UUID(current_user.user_id)})
+    saved = await interaction_service.save_interaction(enforced_payload)
     elapsed_ms = (time.perf_counter() - start_time) * 1000
     return success_response(
         request=request,
@@ -65,10 +71,19 @@ async def get_interaction(
     request: Request,
     interaction_id: UUID,
     interaction_service: InteractionServiceDep,
+    current_user: CurrentUserDep,
 ) -> ApiResponse[InteractionDetailResponse]:
-    """Return a complete interaction with attendees, topics, materials, samples, and products."""
+    """Return a complete interaction with attendees, topics, materials, samples, and products.
+
+    Medical representatives can only retrieve their own interactions.
+    Managers and admins can retrieve any interaction.
+    """
     start_time = time.perf_counter()
-    interaction = await interaction_service.get_interaction(interaction_id)
+    interaction = await interaction_service.get_interaction(
+        interaction_id,
+        requesting_user_id=UUID(current_user.user_id),
+        requesting_role=current_user.role,
+    )
     elapsed_ms = (time.perf_counter() - start_time) * 1000
     return success_response(
         request=request,

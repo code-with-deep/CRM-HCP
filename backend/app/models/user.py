@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Enum, Index, String, text
+from sqlalchemy import Boolean, Enum, Index, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -22,13 +22,8 @@ class User(AuditMixin, Base):
 
     __tablename__ = "users"
     __table_args__ = (
-        Index(
-            "ix_users_email_active",
-            "email",
-            unique=True,
-            postgresql_where=text("deleted_at IS NULL"),
-        ),
-        Index("ix_users_role_active", "role", postgresql_where=text("deleted_at IS NULL")),
+        Index("ix_users_email_active", "email", unique=True),
+        Index("ix_users_role_active", "role"),
     )
 
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)

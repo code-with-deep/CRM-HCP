@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
-import { createBrowserRouter } from 'react-router-dom'
+import { createBrowserRouter, Navigate } from 'react-router-dom'
 
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { LoadingSkeleton } from '@/components/common/LoadingSkeleton'
 import { MainLayout } from '@/layouts/MainLayout'
 
@@ -16,6 +17,18 @@ const HomePage = lazy(() =>
   })),
 )
 
+const LoginPage = lazy(() =>
+  import('@/pages/LoginPage').then((module) => ({
+    default: module.LoginPage,
+  })),
+)
+
+const RegisterPage = lazy(() =>
+  import('@/pages/RegisterPage').then((module) => ({
+    default: module.RegisterPage,
+  })),
+)
+
 function PageLoader() {
   return (
     <div className="flex min-h-[50vh] items-center justify-center p-8">
@@ -26,23 +39,47 @@ function PageLoader() {
 
 export const router = createBrowserRouter([
   {
+    path: '/login',
+    element: (
+      <Suspense fallback={<PageLoader />}>
+        <LoginPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/register',
+    element: (
+      <Suspense fallback={<PageLoader />}>
+        <RegisterPage />
+      </Suspense>
+    ),
+  },
+  {
     path: '/',
     element: (
-      <MainLayout>
-        <Suspense fallback={<PageLoader />}>
-          <LogInteractionPage />
-        </Suspense>
-      </MainLayout>
+      <ProtectedRoute>
+        <MainLayout>
+          <Suspense fallback={<PageLoader />}>
+            <LogInteractionPage />
+          </Suspense>
+        </MainLayout>
+      </ProtectedRoute>
     ),
   },
   {
     path: '/foundation',
     element: (
-      <MainLayout>
-        <Suspense fallback={<PageLoader />}>
-          <HomePage />
-        </Suspense>
-      </MainLayout>
+      <ProtectedRoute>
+        <MainLayout>
+          <Suspense fallback={<PageLoader />}>
+            <HomePage />
+          </Suspense>
+        </MainLayout>
+      </ProtectedRoute>
     ),
+  },
+  {
+    path: '*',
+    element: <Navigate to="/" replace />,
   },
 ])

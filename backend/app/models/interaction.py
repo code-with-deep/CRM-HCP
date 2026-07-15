@@ -6,8 +6,7 @@ import uuid
 from datetime import date, time
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Date, Enum, ForeignKey, Index, String, Text, Time, text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Date, Enum, ForeignKey, Index, String, Text, Time, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -33,41 +32,32 @@ class Interaction(AuditMixin, Base):
 
     __tablename__ = "interactions"
     __table_args__ = (
-        Index("ix_interactions_hcp_active", "hcp_id", postgresql_where=text("deleted_at IS NULL")),
-        Index("ix_interactions_user_active", "user_id", postgresql_where=text("deleted_at IS NULL")),
-        Index(
-            "ix_interactions_date_status_active",
-            "interaction_date",
-            "status",
-            postgresql_where=text("deleted_at IS NULL"),
-        ),
-        Index(
-            "ix_interactions_conversation_active",
-            "conversation_id",
-            postgresql_where=text("deleted_at IS NULL"),
-        ),
+        Index("ix_interactions_hcp_active", "hcp_id"),
+        Index("ix_interactions_user_active", "user_id"),
+        Index("ix_interactions_date_status_active", "interaction_date", "status"),
+        Index("ix_interactions_conversation_active", "conversation_id"),
     )
 
     hcp_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True, native_uuid=False),
         ForeignKey("hcps.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True, native_uuid=False),
         ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
     interaction_type_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True, native_uuid=False),
         ForeignKey("interaction_types.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
     conversation_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True, native_uuid=False),
         ForeignKey("conversation_sessions.id", ondelete="SET NULL"),
         nullable=True,
         index=True,

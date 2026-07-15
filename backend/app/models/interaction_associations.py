@@ -5,8 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import ForeignKey, Index, Integer, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -31,14 +30,14 @@ class InteractionAttendee(AuditMixin, Base):
     )
 
     interaction_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True, native_uuid=False),
         ForeignKey("interactions.id", ondelete="CASCADE"),
         nullable=False,
     )
     attendee_name: Mapped[str] = mapped_column(String(255), nullable=False)
     attendee_role: Mapped[str | None] = mapped_column(String(100), nullable=True)
     hcp_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True, native_uuid=False),
         ForeignKey("hcps.id", ondelete="SET NULL"),
         nullable=True,
     )
@@ -58,12 +57,12 @@ class InteractionTopic(AuditMixin, Base):
     )
 
     interaction_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True, native_uuid=False),
         ForeignKey("interactions.id", ondelete="CASCADE"),
         nullable=False,
     )
     topic_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True, native_uuid=False),
         ForeignKey("topics.id", ondelete="RESTRICT"),
         nullable=False,
     )
@@ -84,12 +83,12 @@ class InteractionMaterial(AuditMixin, Base):
     )
 
     interaction_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True, native_uuid=False),
         ForeignKey("interactions.id", ondelete="CASCADE"),
         nullable=False,
     )
     material_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True, native_uuid=False),
         ForeignKey("materials.id", ondelete="RESTRICT"),
         nullable=False,
     )
@@ -111,12 +110,12 @@ class InteractionSample(AuditMixin, Base):
     )
 
     interaction_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True, native_uuid=False),
         ForeignKey("interactions.id", ondelete="CASCADE"),
         nullable=False,
     )
     sample_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True, native_uuid=False),
         ForeignKey("samples.id", ondelete="RESTRICT"),
         nullable=False,
     )
@@ -138,12 +137,12 @@ class InteractionProduct(AuditMixin, Base):
     )
 
     interaction_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True, native_uuid=False),
         ForeignKey("interactions.id", ondelete="CASCADE"),
         nullable=False,
     )
     product_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True, native_uuid=False),
         ForeignKey("products.id", ondelete="RESTRICT"),
         nullable=False,
     )

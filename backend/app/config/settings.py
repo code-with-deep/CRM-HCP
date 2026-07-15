@@ -1,17 +1,21 @@
 """Application settings loaded from environment variables."""
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+_ENV_FILE = _PROJECT_ROOT / ".env"
 
 
 class Settings(BaseSettings):
     """Centralized application configuration."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_ENV_FILE) if _ENV_FILE.exists() else None,
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",
@@ -25,6 +29,14 @@ class Settings(BaseSettings):
     SECRET_KEY: str = Field(
         default="change-me-in-production",
         description="Secret key for signing tokens and cryptographic operations.",
+    )
+
+    JWT_ALGORITHM: str = Field(default="HS256", description="Algorithm used to sign JWT tokens.")
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(
+        default=60, description="Access token lifetime in minutes."
+    )
+    JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = Field(
+        default=7, description="Refresh token lifetime in days."
     )
 
     DATABASE_URL: str = Field(
@@ -66,10 +78,16 @@ class Settings(BaseSettings):
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, value: str | list[str]) -> list[str]:
-        """Parse comma-separated CORS origins from environment variables."""
-        if isinstance(value, str):
-            return [origin.strip() for origin in value.split(",") if origin.strip()]
-        return value
+        """Parse CORS origins — accepts a JSON array or comma-separated string."""
+        if not value:
+            return ["http://localhost:5173", "http://127.0.0.1:5173"]
+        if isinstance(value, list):
+            return value
+        value = value.strip()
+        if value.startswith("["):
+            import json
+            return json.loads(value)
+        return [origin.strip() for origin in value.split(",") if origin.strip()]
 
     @property
     def is_development(self) -> bool:

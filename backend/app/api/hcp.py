@@ -6,7 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request
 
 from app.api.response import success_response
-from app.core.dependencies import HcpServiceDep
+from app.core.dependencies import CurrentUserDep, HcpServiceDep
 from app.schemas.common import PaginatedResponse
 from app.schemas.hcp_api import HcpHistoryResponse, HcpSearchQuery, HcpSearchResultItem
 from app.schemas.responses import ApiResponse
@@ -22,6 +22,7 @@ router = APIRouter(prefix="/hcp", tags=["HCP"])
 async def search_hcps(
     request: Request,
     hcp_service: HcpServiceDep,
+    _current_user: CurrentUserDep,
     query: HcpSearchQuery = Depends(),
 ) -> ApiResponse[PaginatedResponse[HcpSearchResultItem]]:
     """Search HCPs by doctor name, hospital, city, and specialization."""
@@ -50,6 +51,7 @@ async def get_hcp_history(
     request: Request,
     hcp_id: UUID,
     hcp_service: HcpServiceDep,
+    _current_user: CurrentUserDep,
 ) -> ApiResponse[HcpHistoryResponse]:
     """Return previous interactions for a healthcare professional."""
     start_time = time.perf_counter()

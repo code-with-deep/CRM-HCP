@@ -1,4 +1,5 @@
-export { apiClient, getApiBaseUrl } from '@/services/apiClient'
+export { apiClient, getApiBaseUrl, getToken, clearToken, saveToken, getCurrentUserId } from '@/services/apiClient'
+export { login, logout, register, type LoginRequest, type RegisterRequest, type TokenResponse } from '@/services/authService'
 export { chatService, ChatService } from '@/services/chatService'
 export { hcpService, HcpService } from '@/services/hcpService'
 export {

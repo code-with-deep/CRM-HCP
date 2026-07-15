@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Index, String, Text, text
+from sqlalchemy import Boolean, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -19,12 +19,7 @@ class InteractionType(AuditMixin, Base):
 
     __tablename__ = "interaction_types"
     __table_args__ = (
-        Index(
-            "ix_interaction_types_name_active",
-            "name",
-            unique=True,
-            postgresql_where=text("deleted_at IS NULL"),
-        ),
+        Index("ix_interaction_types_name_active", "name", unique=True),
     )
 
     name: Mapped[str] = mapped_column(String(100), nullable=False)

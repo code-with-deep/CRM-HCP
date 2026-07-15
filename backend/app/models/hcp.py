@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum, Index, String, Text, text
+from sqlalchemy import Enum, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -21,9 +21,9 @@ class Hcp(AuditMixin, Base):
 
     __tablename__ = "hcps"
     __table_args__ = (
-        Index("ix_hcps_name_active", "name", postgresql_where=text("deleted_at IS NULL")),
-        Index("ix_hcps_city_state_active", "city", "state", postgresql_where=text("deleted_at IS NULL")),
-        Index("ix_hcps_status_active", "status", postgresql_where=text("deleted_at IS NULL")),
+        Index("ix_hcps_name_active", "name"),
+        Index("ix_hcps_city_state_active", "city", "state"),
+        Index("ix_hcps_status_active", "status"),
     )
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)

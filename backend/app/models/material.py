@@ -5,8 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum, ForeignKey, Index, String, Text, text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Enum, ForeignKey, Index, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -23,8 +22,8 @@ class Material(AuditMixin, Base):
 
     __tablename__ = "materials"
     __table_args__ = (
-        Index("ix_materials_type_active", "material_type", postgresql_where=text("deleted_at IS NULL")),
-        Index("ix_materials_product_active", "product_id", postgresql_where=text("deleted_at IS NULL")),
+        Index("ix_materials_type_active", "material_type"),
+        Index("ix_materials_product_active", "product_id"),
     )
 
     name: Mapped[str] = mapped_column(String(150), nullable=False)
@@ -34,7 +33,7 @@ class Material(AuditMixin, Base):
     )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     product_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True, native_uuid=False),
         ForeignKey("products.id", ondelete="SET NULL"),
         nullable=True,
         index=True,

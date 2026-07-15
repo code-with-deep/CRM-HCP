@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Index, String, Text, text
+from sqlalchemy import Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -21,13 +21,8 @@ class Product(AuditMixin, Base):
 
     __tablename__ = "products"
     __table_args__ = (
-        Index(
-            "ix_products_name_brand_active",
-            "product_name",
-            "brand",
-            postgresql_where=text("deleted_at IS NULL"),
-        ),
-        Index("ix_products_category_active", "category", postgresql_where=text("deleted_at IS NULL")),
+        Index("ix_products_name_brand_active", "product_name", "brand"),
+        Index("ix_products_category_active", "category"),
     )
 
     product_name: Mapped[str] = mapped_column(String(150), nullable=False)

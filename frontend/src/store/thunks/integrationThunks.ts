@@ -1,6 +1,6 @@
 import { createAsyncThunk } from '@reduxjs/toolkit'
 
-import { classifyApiError, DEMO_USER_ID } from '@/services/apiClient'
+import { classifyApiError, getCurrentUserId } from '@/services/apiClient'
 import { chatService } from '@/services/chatService'
 import { hcpService } from '@/services/hcpService'
 import {
@@ -147,7 +147,7 @@ export const sendChatMessage = createAsyncThunk(
     const request: ChatRequest = {
       message,
       conversation_id: state.chat.conversationId,
-      user_id: DEMO_USER_ID,
+      user_id: getCurrentUserId(),
       current_interaction: state.interaction.draft as unknown as Record<string, unknown>,
       current_hcp: state.interaction.currentHcp,
     }
@@ -224,7 +224,7 @@ export const saveInteractionDraft = createAsyncThunk(
     dispatch(setSaveError(null))
 
     const request: SaveInteractionRequest = {
-      user_id: DEMO_USER_ID,
+      user_id: getCurrentUserId(),
       conversation_id: state.chat.conversationId,
       hcp_id: state.hcp.selectedHcpId,
       interaction_draft: state.interaction.draft,

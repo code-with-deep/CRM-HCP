@@ -13,10 +13,12 @@ from app.config.settings import get_settings
 
 settings = get_settings()
 
+_is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+
 engine: AsyncEngine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
-    pool_pre_ping=True,
+    connect_args={"check_same_thread": False} if _is_sqlite else {},
 )
 
 async_session_factory = async_sessionmaker(

@@ -9,9 +9,22 @@ import type { ApiErrorResponse } from '@/types/api.types'
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 const MAX_RETRIES = 3
 const RETRY_DELAY_MS = 1000
+const TOKEN_STORAGE_KEY = 'crm_access_token'
 
 interface RetryableRequestConfig extends InternalAxiosRequestConfig {
   __retryCount?: number
+}
+
+export function saveToken(token: string): void {
+  localStorage.setItem(TOKEN_STORAGE_KEY, token)
+}
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_STORAGE_KEY)
+}
+
+export function clearToken(): void {
+  localStorage.removeItem(TOKEN_STORAGE_KEY)
 }
 
 function delay(ms: number): Promise<void> {
@@ -103,15 +116,28 @@ export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
-    'X-User-Id': import.meta.env.VITE_DEMO_USER_ID ?? '',
   },
   timeout: 90000,
+})
+
+apiClient.interceptors.request.use((config) => {
+  const token = getToken()
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
 })
 
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError<ApiErrorResponse>) => {
     const config = error.config as RetryableRequestConfig | undefined
+
+    if (error.response?.status === 401) {
+      clearToken()
+      window.location.href = '/login'
+      return Promise.reject(new Error('Session expired. Please log in again.'))
+    }
 
     if (config && isRetryableError(error)) {
       config.__retryCount = config.__retryCount ?? 0
@@ -138,5 +164,21 @@ export function getApiBaseUrl(): string {
   return API_BASE_URL
 }
 
-export const DEMO_USER_ID =
-  import.meta.env.VITE_DEMO_USER_ID ?? '00000000-0000-0000-0000-000000000001'
+/**
+ * Decode the stored JWT payload and return the user's ID (the `sub` claim).
+ * Falls back to the VITE_DEMO_USER_ID env variable for unauthenticated sessions.
+ */
+export function getCurrentUserId(): string {
+  const token = getToken()
+  if (token) {
+    try {
+      const payloadBase64 = token.split('.')[1]
+      const payload = JSON.parse(atob(payloadBase64))
+      if (payload.sub) return payload.sub
+    } catch {
+      // Malformed token — fall through to env fallback
+    }
+  }
+  return import.meta.env.VITE_DEMO_USER_ID ?? ''
+}
+

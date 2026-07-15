@@ -11,6 +11,7 @@ from app.config.settings import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import get_logger, setup_logging
 from app.core.middleware import RequestContextMiddleware
+from app.database.session import engine
 from app.utils.environment import load_environment
 
 load_environment()
@@ -23,6 +24,12 @@ logger = get_logger(__name__)
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     """Manage application startup and shutdown events."""
     logger.info("Starting %s v%s", settings.APP_NAME, settings.APP_VERSION)
+    if settings.DATABASE_URL.startswith("sqlite"):
+        from app.database.base import Base
+        import app.models  # noqa: F401 — ensure all models are registered
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("SQLite tables ensured.")
     yield
     logger.info("Shutting down %s", settings.APP_NAME)
 

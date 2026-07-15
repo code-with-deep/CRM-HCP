@@ -5,8 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Enum, ForeignKey, Index, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import JSON, Enum, ForeignKey, Index, Integer, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -28,20 +27,20 @@ class ToolExecutionLog(AuditMixin, Base):
     )
 
     session_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True, native_uuid=False),
         ForeignKey("conversation_sessions.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
     message_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True, native_uuid=False),
         ForeignKey("conversation_messages.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
     tool_name: Mapped[str] = mapped_column(String(150), nullable=False)
-    input_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
-    output_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    input_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    output_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     execution_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[ToolExecutionStatus] = mapped_column(
         Enum(ToolExecutionStatus, name="tool_execution_status", native_enum=False),

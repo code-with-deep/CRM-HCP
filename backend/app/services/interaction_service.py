@@ -134,14 +134,34 @@ class InteractionService:
             raise DatabaseException(detail="Interaction was saved but could not be retrieved.")
         return InteractionDetailResponse.model_validate(saved)
 
-    async def get_interaction(self, interaction_id: UUID) -> InteractionDetailResponse:
-        """Retrieve a complete interaction with associations."""
+    async def get_interaction(
+        self,
+        interaction_id: UUID,
+        *,
+        requesting_user_id: UUID | None = None,
+        requesting_role: str | None = None,
+    ) -> InteractionDetailResponse:
+        """Retrieve a complete interaction with associations.
+
+        Access rules:
+        - admin / manager : can retrieve any interaction.
+        - medical_representative (or unknown role): can only retrieve their own interactions.
+        """
         interaction = await self._interaction_repository.get_with_relations(interaction_id)
         if interaction is None:
             raise NotFoundException(
                 message="Interaction not found",
                 detail=f"No interaction exists for id={interaction_id}",
             )
+
+        privileged_roles = {"admin", "manager"}
+        if requesting_user_id is not None and requesting_role not in privileged_roles:
+            if interaction.user_id != requesting_user_id:
+                raise NotFoundException(
+                    message="Interaction not found",
+                    detail=f"No interaction exists for id={interaction_id}",
+                )
+
         return InteractionDetailResponse.model_validate(interaction)
 
     async def _resolve_hcp_id(

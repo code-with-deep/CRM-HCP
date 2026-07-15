@@ -3,8 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import DateTime, ForeignKey, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 
@@ -12,7 +11,7 @@ class UUIDPrimaryKeyMixin:
     """UUID primary key mixin."""
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True, native_uuid=False),
         primary_key=True,
         default=uuid.uuid4,
     )
@@ -33,13 +32,13 @@ class AuditMixin(UUIDPrimaryKeyMixin):
         onupdate=func.now(),
     )
     created_by: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True, native_uuid=False),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
     updated_by: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True, native_uuid=False),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
         index=True,

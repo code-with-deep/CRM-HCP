@@ -3,10 +3,9 @@
 import json
 import time
 from collections.abc import AsyncIterator
-
 from uuid import UUID
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
 from app.api.response import success_response
@@ -26,14 +25,17 @@ async def get_chat_session(
     request: Request,
     conversation_id: UUID,
     chat_service: ChatServiceDep,
-    _current_user: CurrentUserDep,
-    user_id: UUID = Query(description="CRM user who owns the conversation session."),
+    current_user: CurrentUserDep,
 ) -> ApiResponse[ChatResponseData]:
-    """Return saved interaction draft, HCP context, and chat history for page reload."""
+    """Return saved interaction draft, HCP context, and chat history for page reload.
+
+    The user identity is taken exclusively from the verified JWT token —
+    the caller cannot impersonate another user by supplying a different user_id.
+    """
     start_time = time.perf_counter()
     response_data = await chat_service.get_session_state(
         conversation_id=conversation_id,
-        user_id=user_id,
+        user_id=UUID(current_user.user_id),
     )
     return success_response(
         request=request,
@@ -82,10 +84,16 @@ async def chat(
     chat_service: ChatServiceDep,
     current_user: CurrentUserDep,
 ) -> ApiResponse[ChatResponseData]:
-    """Route a user message through LangGraph and return the updated conversation state."""
+    """Route a user message through LangGraph and return the updated conversation state.
+
+    The user_id in the payload is overridden by the verified JWT identity so that
+    a user cannot create or read conversations belonging to another user.
+    """
     start_time = time.perf_counter()
-    user_context = current_user.model_copy(update={"user_id": str(payload.user_id)})
-    response_data, elapsed_ms = await chat_service.process_chat(payload, user_context=user_context)
+    enforced_payload = payload.model_copy(update={"user_id": UUID(current_user.user_id)})
+    response_data, elapsed_ms = await chat_service.process_chat(
+        enforced_payload, user_context=current_user
+    )
     return success_response(
         request=request,
         message="Chat processed successfully.",
@@ -111,11 +119,14 @@ async def chat_stream(
     chat_service: ChatServiceDep,
     current_user: CurrentUserDep,
 ) -> StreamingResponse:
-    """Stream LangGraph progress and assistant response tokens via SSE."""
-    user_context = current_user.model_copy(update={"user_id": str(payload.user_id)})
+    """Stream LangGraph progress and assistant response tokens via SSE.
+
+    The user_id in the payload is overridden by the verified JWT identity.
+    """
+    enforced_payload = payload.model_copy(update={"user_id": UUID(current_user.user_id)})
 
     async def event_generator() -> AsyncIterator[str]:
-        async for event in chat_service.stream_chat(payload, user_context=user_context):
+        async for event in chat_service.stream_chat(enforced_payload, user_context=current_user):
             yield f"event: {event['event']}\ndata: {json.dumps(event['data'])}\n\n"
 
     return StreamingResponse(
